@@ -1,0 +1,32 @@
+{
+  "scope": "Completed Northeast China engineering run; not scientific findings or a global benchmark",
+  "period": [
+    2001,
+    2024
+  ],
+  "years": 24,
+  "points": 39762,
+  "grids": 151,
+  "grid_year_files": 3624,
+  "scene_rows": 21310299,
+  "failed_jobs_at_completion": 0,
+  "metered_production_and_check_eecu_hours": 248.5669677777778,
+  "successful_requests_without_profile": 99,
+  "metering_note": "Partial profiling total, not complete run consumption; missing profiles do not invalidate saved data.",
+  "pilot_integer_vs_scaled_reflectance_equal": true,
+  "pilot_metered_eecu_hours_per_point_year": 0.0003833853629170967,
+  "pilot_forecast_regional_eecu_hours": 365.8600512074304,
+  "forecast_note": "Historical regional pilot extrapolation, not observed total or global cost forecast.",
+  "project_month_usage_snapshot": {
+    "as_of_utc": "2026-09-17T16:05:55.925052+00:00",
+    "eecu_hours": 879.0671513241106,
+    "note": "Project-wide recorded monthly snapshot; includes other work and may lag. Not current balance or extraction-only consumption."
+  },
+  "console_check_2026_09_19": {
+    "registration": "noncommercial",
+    "tier": "Contributor",
+    "monthly_quota_used_percent": 89.59,
+    "warning": "Approaching noncommercial compute quota limit",
+    "source": "Earth Engine configuration page, visually verified; not an extraction-only measurement"
+  }
+}

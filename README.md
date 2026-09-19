@@ -1,101 +1,133 @@
-# Forest-Edge Canopy Stability under Climate Extremes
+# Forest temporal stability: Earth Engine processing example
 
-This repository contains the Google Earth Engine processing code and downstream analysis scripts for a study investigating how forest fragmentation and edge exposure affect the year-to-year stability of forest canopy functioning under heat, drought, and compound climate extremes.
+Noncommercial research at the School of Ecology, Northeast Forestry University.
+Our planned study assesses forest functional stability over 2001–2024 across
+global forest environments. Northeast China is the current regional development
+and processing test case. Global production has not been completed.
 
-## Project overview
+This repository provides an **engineering example**, adapted from our regional
+Landsat observation-extraction workflow, to make its computational design
+reviewable. It is not a complete scientific reproduction package. The current
+release contains no unpublished effect estimates, statistical models, research
+sample coordinates, credentials, private assets, or manuscript results. No
+publication is claimed for this project.
 
-Forest fragmentation exposes over 70% of the world's remaining forests to edge effects within 1 km of a non-forest boundary. This project uses 30 m Harmonized Landsat and Sentinel-2 (HLS) observations and ERA5-Land climate records to quantify where fragmented and edge-exposed forests are most vulnerable to climate extremes, and how that vulnerability has changed over the past decade (2013–2025).
+## Contents
 
-### Current status
+- `earth_engine/extract_observations.py`: one bounded point-batch/year extraction,
+  input-aware checkpoints, QA checks and raw profiler capture.
+- `check_engineering.py`: offline checks that consume no Earth Engine resources.
+- `engineering_evidence.json`: aggregate engineering counts from a completed
+  regional run, with explicit limits on the compute accounting.
 
-- **Regional analysis (Northeast China)**: Completed and validated. 345,033 forest pixels across 514 sampling grids; 4,156,725 annual observations.
-- **Global climate preprocessing**: Completed. 394,488 hourly ERA5-Land timestamps across 675,939 grid cells; approximately 50.8 million cell-level heatwave events identified (1981–2025).
-- **Global canopy extraction**: Pending. Up to 8,593 candidate 100 × 100 km grid cells across six major forest biomes.
+## Why Earth Engine is needed
 
-### Key findings (regional pilot)
+The processing stage accesses Landsat Collection 2 Level 2 imagery from Landsat
+5, 7, 8 and 9 at 30 m for 24 years. It filters observations, applies consistent
+quality screening, and extracts red/NIR observations and provenance at supplied
+sample locations. Extracted observations can be reused locally for temporal
+aggregation and statistical analysis without repeatedly scanning satellite
+collections in Earth Engine. Climate and forest-context inputs are separate
+workloads and are not implemented in this example.
 
-- Canopy temporal stability 30 m from forest edges was 20.9% lower than at 480 m.
-- Year-to-year variability was 23.3% greater near edges.
-- Forests with denser canopy cover were less vulnerable; edges adjacent to wider open areas showed greater instability.
+The intended research output is a documented, geographically broad sampled
+dataset and comparative assessment of forest stability, supporting research on
+forest conservation and climate adaptation. This does not promise a wall-to-wall
+global 30 m map or claim that management agencies already use the results.
 
-## Repository structure
+## Implemented computational choices
 
+1. Filter dates, location and required bands before constructing the extraction.
+2. Reuse one QA mask for red/NIR and provenance bands; retain QA metadata.
+3. Apply exact integer-DN reflectance bounds before transfer. Convert retained
+   red/NIR values locally with `reflectance = DN * 0.0000275 - 0.2`.
+4. Transfer selected observations at sampled locations, rather than full imagery.
+   Per-observation values are retained so alternative temporal summaries do not
+   require another cloud extraction.
+5. Keep each request to one compact spatial unit and one year. This public
+   example submits one request at a time and never launches a global job set.
+6. Key checkpoints by input coordinates, year, projection and code contract;
+   write completed data atomically before profiler finalization. Missing
+   profiling does not trigger re-extraction of saved observations.
+7. Reject unexpected pagination, missing samples and invalid observations.
+   Errors propagate for review; this example does not automatically resubmit.
+
+The production workflow also used bounded concurrency and smaller point batches
+when memory limits required splitting. Those orchestration features are not
+included in this minimal example. No percentage compute saving is claimed for
+this release.
+
+## Recorded regional workload
+
+The completed 2001–2024 extraction covered 39,762 requested sample locations in
+151 processing grids: 3,624 grid-year files and 21,310,299 retained observation
+rows. Points need not have a valid observation in every year. These are processing
+counts, not the final scientific analysis sample.
+
+Available production/check profiles sum to **248.57 EECU-hours**, but **99
+successful requests lacked profiles**. Therefore this is incomplete compute
+accounting, not the total cost. A small regional pilot predicted approximately
+365.86 EECU-hours for that regional workload; the forecast and partial measured
+total are different quantities. A project-wide monthly snapshot on September 17,
+2026 recorded 879.07 EECU-hours and includes other work. It is not a current
+balance or evidence that the project had exhausted its monthly quota.
+
+Global cost cannot be inferred by area alone: cloud cover, scene density,
+sampling density and forest context vary. Expansion will be staged, with
+representative benchmarks and monthly monitoring before scaling. The regional
+workflow already consumes a substantial share of the Contributor allowance while
+global coverage, additional context and validation remain ahead.
+
+## Run a small example
+
+Python 3.10+ is recommended. Authenticate with your own registered noncommercial
+Earth Engine project; no project or private assets are embedded here.
+
+```sh
+python -m pip install -r requirements.txt
+earthengine authenticate
+python check_engineering.py
 ```
-earth_engine/
-├── canopy_extraction_pilot.py     # 30 m annual NIRv extraction — 4-patch canary (validated)
-├── canopy_extraction_global.py    # 30 m annual NIRv extraction — full 48-patch scope
-└── climate_preprocessing.py       # ERA5-Land 1991–2020 JJA climate normals recovery
 
-analysis/
-├── fit_nonlinear_main_effect_check.py         # Nonlinear climate main-effect models
-├── project_observed_climate_states.py         # Climate-state projection onto distance curves
-├── fit_five_year_full_curve_controls.py       # Five-year window stability curve analysis
-└── fit_regional_stability_time_trend.py       # Regional stability time-trend analysis
+Supply your own CSV with columns `pixel_id,longitude,latitude`, containing
+1–500 unique IDs from a compact region. Coordinates are WGS84. Specify a metric
+projected CRS and its 30 m grid transform to match your sample grid. The following
+is only an example projection, not the research grid:
+
+```sh
+python earth_engine/extract_observations.py \
+  --project YOUR_PROJECT_ID --points YOUR_POINTS.csv --year 2020 \
+  --crs EPSG:32652 --transform 30 0 500000 0 -30 5000000
 ```
 
-## Earth Engine processing pipeline
+This validates inputs and prints the plan without contacting Earth Engine. Add
+`--execute` to perform the metered extraction. A full-year array can still exceed
+memory in dense archives; reduce the point batch when necessary. A single point
+or small set is the appropriate first live test. Run only one process per output
+directory; this example is sequential and has no concurrent-writer lock.
 
-### Stage 1: Climate preprocessing (completed)
+Each feature's `first` array contains rows ordered as:
+`red_dn, nir_dn, time_ms, sensor, pathrow, QA_PIXEL, QA_RADSAT, sensor_atmosphere`.
+Masked points remain in the response but may have no observation array.
+Atmospheric metadata differ between sensor families and require sensor-specific
+interpretation. `-9999` denotes missing atmospheric metadata.
 
-`earth_engine/climate_preprocessing.py` recovers ERA5-Land JJA (June–August) climate normals for the 1991–2020 reference period across the 514 formal sampling grids. Variables include:
-- Mean 2-m air temperature
-- Cumulative downward shortwave radiation
-- Root-zone soil moisture (layers 1–3, depth-weighted)
-- 95th-percentile vapor pressure deficit (VPD), derived from hourly 2-m air and dewpoint temperature
+Raw `.profile.txt` output is retained for inspection. Cross-check accounting with
+Cloud Monitoring; wall-clock time is not EECU usage, and a missing profile is not
+zero consumption. If profiling fails after data persistence, the error remains
+visible and the next invocation reuses the completed checkpoint.
 
-The script uses checkpoint-based restart to avoid reprocessing completed years.
+## Validation and scope
 
-### Stage 2: 30 m canopy extraction (regional pilot completed; global pending)
-
-`earth_engine/canopy_extraction_pilot.py` and `canopy_extraction_global.py` extract annual growing-season median NIRv (near-infrared reflectance of vegetation) at 30 m resolution from the HLS L30 collection.
-
-Key processing steps:
-- Cloud, cloud-shadow, snow, and high-aerosol masking via the HLS Fmask band
-- Annual scene count, distance-to-edge, and median NIRv computed per pixel per year
-- Pixels filtered by minimum valid-year count (≥10 of 13 years) and distance range (30–480 m from forest edge)
-- Each forest patch processed as an independently resumable spatial unit
-- Results exported as compact CSV summaries to Cloud Storage
-
-### Optimizations implemented
-
-- Spatial partitioning into fixed, independently resumable units with checkpoint-based restart
-- `filterBounds`, date, and band pre-filtering before image collection construction
-- Single shared cloud/shadow/snow validity mask reused across all analyses
-- Compatible reducers combined to avoid redundant collection evaluation
-- Memory-intensive annual calculations split into seasonal sub-calculations (verified to reproduce annual results exactly)
-- Compact annual summary export instead of hourly arrays
-- Controlled batch submission concurrency
-- Preflight and cloud-state validation before any submission to prevent duplicate or overwriting tasks
-
-A matched optimization test showed the optimized implementation reduced Earth Engine computation by 51.9% while reproducing the same scientific output.
-
-## Compute requirements
-
-| Stage | Scope | EECU-hours |
-|---|---|---|
-| Climate preprocessing | 675,939 grid cells × 45 years | Completed |
-| Canopy extraction (NE China) | 163 processing units | ~289 |
-| Canopy extraction (global, estimated) | ~8,593 processing units | ~15,000 |
-
-The estimated global canopy extraction requirement is approximately 15× the monthly Contributor Tier quota (1,000 EECU-hours).
-
-## Data sources
-
-| Dataset | Earth Engine ID | Resolution | Period |
-|---|---|---|---|
-| Harmonized Landsat Sentinel-2 (L30) | `NASA/HLS/HLSL30/v002` | 30 m | 2013–2025 |
-| ERA5-Land Monthly | `ECMWF/ERA5_LAND/MONTHLY_AGGR` | ~11 km | 1981–2025 |
-| ERA5-Land Hourly | `ECMWF/ERA5_LAND/HOURLY` | ~11 km | 1981–2025 |
-| Global Forest Change | Hansen et al. 2013 (via derived lattice) | 30 m | 2000–2023 |
-
-## Related publication
-
-Zhou, Z.; et al. (2023). *Remote Sensing*, 15(5), 1335. DOI: [10.3390/rs15051335](https://doi.org/10.3390/rs15051335)
-
-## Affiliation
-
-School of Ecology, Northeast Forestry University, Harbin, China.
+The source regional workflow completed a pilot comparison against a floating-
+reflectance implementation before production. For this public adaptation, local
+checks verify integer-bound equivalence across all 16-bit DN values, checkpoint
+identity, response completeness and reuse of saved data without a profiler.
+The public adaptation has not been run as a new live EE extraction; no extra
+research compute was consumed to publish it. Do not interpret offline checks as
+end-to-end cloud validation or multi-sensor scientific harmonization.
 
 ## License
 
-This code is released for noncommercial research use.
+As in the previous repository, this code is provided for noncommercial research
+use. Source imagery remains subject to its respective terms.
